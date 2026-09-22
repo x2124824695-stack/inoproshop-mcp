@@ -1,0 +1,25 @@
+PASS initialize: live MCP stdio handshake
+PASS tools/list: 18 registered tools
+  find_references
+  get_all_pou_code
+  get_capabilities
+  get_codesys_status
+  get_command_status
+  get_compile_messages
+  get_device_params
+  get_pou_code
+  get_project_structure
+  get_task_config
+  inspect_device_node
+  launch_codesys
+  list_device_repository
+  list_project_libraries
+  list_project_templates
+  open_project
+  recover_session
+  search_code
+PASS get_capabilities: structured response received
+PASS access: write/online tools absent from read-only discovery
+PASS status: stopped
+PASS refusal: IDE not ready reported as failure
+DONE: real protocol demonstration; no IDE or PLC acceptance claimed

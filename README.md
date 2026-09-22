@@ -1,5 +1,11 @@
 # InoProShop MCP Improved 1.1
 
+## Demo
+
+[运行演示与流程图](demos/README.md) · [实测终端输出](demos/expected-output.txt)
+
+通过真实 MCP 服务演示工具发现、能力查询和权限限制，无需连接 PLC。
+
 面向汇川 InoProShop 的本地 stdio MCP 服务。它以用户提供的常驻版源码为主体，合并了 LIMIT-LMT 单文件版中有价值的工程读取、对象移动和任务配置能力，并修复了会造成误报、重复执行或在线操作升级的问题。
 
 1.1 已通过 TypeScript、stdio 协议、故障注入和模拟 ScriptEngine 测试，并使用本机 InoProShop 自带的 IronPython 2.7.7 验证中文检索、全量读取和 Watcher 执行。此次验证没有启动 IDE 或连接 PLC；实际 ScriptEngine API、主线程调度和设备接口仍需按 [VALIDATION.md](VALIDATION.md) 验收。具体修复见 [AUDIT_1.1.md](AUDIT_1.1.md)。
