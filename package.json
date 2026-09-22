@@ -1,0 +1,68 @@
+{
+  "name": "inoproshop-mcp-improved",
+  "version": "1.1.0",
+  "description": "InoProShop MCP with verified edits, persistent session ownership and explicit online operations",
+  "main": "dist/server.js",
+  "bin": {
+    "inoproshop-mcp": "dist/bin.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md",
+    "config/",
+    "IMPROVEMENT_PLAN.md",
+    "VALIDATION.md",
+    "AUDIT_1.1.md"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc && node -e \"require('fs').cpSync('src/scripts','dist/scripts',{recursive:true})\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run check",
+    "test:python": "python -X utf8 -m unittest discover -s tests -p \"test_*.py\"",
+    "check": "npm run typecheck && npm run build && npm test && npm run test:python"
+  },
+  "keywords": [
+    "codesys",
+    "mcp",
+    "plc",
+    "automation",
+    "persistent",
+    "ui"
+  ],
+  "author": "luke-harriman",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/x2124824695-stack/inoproshop-mcp.git"
+  },
+  "homepage": "https://github.com/x2124824695-stack/inoproshop-mcp#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "commander": "^11.1.0",
+    "uuid": "^9.0.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.1",
+    "@types/uuid": "^9.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.3",
+    "vitest": "^1.6.0"
+  },
+  "bugs": {
+    "url": "https://github.com/x2124824695-stack/inoproshop-mcp/issues"
+  },
+  "contributors": [
+    {
+      "name": "x2124824695-stack"
+    }
+  ]
+}

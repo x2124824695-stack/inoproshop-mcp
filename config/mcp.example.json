@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "inoproshop": {
+      "command": "node",
+      "args": [
+        "D:/path/to/inoproshop-mcp/dist/bin.js",
+        "--codesys-path", "C:/path/to/InoProShop.exe",
+        "--codesys-profile", "YOUR_EXACT_INOPROSHOP_PROFILE",
+        "--workspace", "D:/PLC/Workspace"
+      ]
+    }
+  }
+}
