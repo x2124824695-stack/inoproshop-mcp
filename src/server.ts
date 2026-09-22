@@ -177,7 +177,7 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
 
   s.tool(
     'shutdown_codesys',
-    'Save projects and stop the MCP watcher. Leaves the IDE open; close it manually before starting a fresh watcher.',
+    'Save the primary project and stop the MCP watcher. Leaves the IDE open; close it manually before starting a fresh watcher.',
     async () => {
       if (!launcher) {
         return {
@@ -192,10 +192,11 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
       try {
         await launcher.shutdown();
         return {
-          content: [{ type: 'text' as const, text: 'Projects saved; watcher stopped. IDE left open.' }],
+          content: [{ type: 'text' as const, text: 'Primary project saved; watcher stopped. IDE left open.' }],
           isError: false,
         };
       } catch (err) {
+        if (launcher.getStatus().state === 'ready') executor.swapNow(launcher);
         const msg = err instanceof Error ? err.message : String(err);
         return {
           content: [{ type: 'text' as const, text: `Shutdown failed: ${msg}` }],
@@ -274,64 +275,31 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
 
   s.tool(
     'create_project',
-    "Create a new CODESYS project from a template. By default copies the bundled Standard.project. Pass templatePath to copy a different .project file (Option A), or templateName to instantiate a template registered with CODESYS's Template Manager — e.g. an ifm AE3100 template from an installed device package (Option B). Use list_project_templates to discover valid templateName / templatePath values.",
+    "Create a project from an explicitly selected template. Supply exactly one of templatePath or templateName; the template determines the root controller. No implicit Standard.project fallback and no overwrite of an existing target.",
     {
       filePath: z.string().describe("Path where the new project file should be created."),
       templatePath: z.string().optional().describe("Optional path to a .project file to copy as the template. Use when you have a known-good reference project on disk."),
       templateName: z.string().optional().describe("Optional name of a template registered with CODESYS (as seen in File > New Project > Standard Project from Template). Resolved via ScriptEngine; use list_project_templates to discover names."),
     },
     async (args: { filePath: string; templatePath?: string; templateName?: string }) => {
-      const absPath = path.normalize(
-        path.isAbsolute(args.filePath) ? args.filePath : path.join(workspaceDir, args.filePath)
-      );
-
-      // templateName takes precedence over templatePath (more specific intent).
-      // If neither is provided, fall back to the bundled Standard.project copy.
-      let mode: 'name' | 'path';
-      let templatePath = '';
-      let templateName = '';
-
-      if (args.templateName && args.templateName.trim().length > 0) {
-        mode = 'name';
-        templateName = args.templateName.trim();
-      } else if (args.templatePath && args.templatePath.trim().length > 0) {
-        mode = 'path';
-        templatePath = path.normalize(
-          path.isAbsolute(args.templatePath) ? args.templatePath : path.join(workspaceDir, args.templatePath)
-        );
-        if (!(await fileExists(templatePath))) {
-          return {
-            content: [{ type: 'text' as const, text: `Template Error: templatePath does not exist: ${templatePath}` }],
-            isError: true,
-          };
-        }
-      } else {
-        // Default: bundled Standard.project, same lookup chain as before.
-        mode = 'path';
-        try {
-          const baseDir = path.dirname(path.dirname(config.codesysPath));
-          templatePath = path.normalize(path.join(baseDir, 'Templates', 'Standard.project'));
-          if (!(await fileExists(templatePath))) {
-            const programData = process.env.ALLUSERSPROFILE || process.env.ProgramData || 'C:\\ProgramData';
-            const pd1 = path.normalize(path.join(programData, 'CODESYS', 'CODESYS', config.profileName, 'Templates', 'Standard.project'));
-            if (await fileExists(pd1)) {
-              templatePath = pd1;
-            } else {
-              const pd2 = path.normalize(path.join(programData, 'CODESYS', 'Templates', 'Standard.project'));
-              if (await fileExists(pd2)) {
-                templatePath = pd2;
-              } else {
-                throw new Error('Standard template project file not found. Pass templatePath or templateName explicitly.');
-              }
-            }
-          }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          return {
-            content: [{ type: 'text' as const, text: `Template Error: ${msg}` }],
-            isError: true,
-          };
-        }
+      const absPath = resolvePath(args.filePath, workspaceDir);
+      const hasName = !!args.templateName?.trim();
+      const hasPath = !!args.templatePath?.trim();
+      if (hasName === hasPath) {
+        return {content: [{type: 'text' as const,
+          text: 'Template Error: supply exactly one of templatePath or templateName. The selected template determines the root controller.'}], isError: true};
+      }
+      if (await fileExists(absPath)) {
+        return {content: [{type: 'text' as const, text: `Target project already exists: ${absPath}`}], isError: true};
+      }
+      const mode: 'name' | 'path' = hasName ? 'name' : 'path';
+      const templateName = hasName ? args.templateName!.trim() : '';
+      const templatePath = hasPath ? resolvePath(args.templatePath!, workspaceDir) : '';
+      if (hasPath && !(await fileExists(templatePath))) {
+        return {content: [{type: 'text' as const, text: `Template Error: templatePath does not exist: ${templatePath}`}], isError: true};
+      }
+      if (hasPath && path.extname(templatePath).toLowerCase() !== '.project') {
+        return {content: [{type: 'text' as const, text: 'Template Error: templatePath must name a .project file.'}], isError: true};
       }
 
       const script = scriptManager.prepareScript('create_project', {
@@ -709,7 +677,7 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
 
   s.tool(
     'rename_object',
-    'Renames a project object (POU, DUT, GVL, folder, etc.) in the CODESYS project.',
+    'Renames a project object. When the target is a POU, also updates matching task POU-call nodes in its Application, verifies readback and saves. Refuses the rename if task-call synchronization fails.',
     {
       projectFilePath: z.string().describe("Path to the project file."),
       objectPath: z.string().describe("Full relative path to the object to rename (e.g., 'Application/MyPOU')."),
@@ -1154,7 +1122,7 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
 
         if (libraries.length === 0) {
           return {
-            content: [{ type: 'text' as const, text: 'No libraries found in the project (or Library Manager not found).' }],
+            content: [{ type: 'text' as const, text: 'No libraries found in the identified Library Manager.' }],
             isError: false,
           };
         }

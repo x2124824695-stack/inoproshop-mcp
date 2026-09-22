@@ -13,6 +13,8 @@ try:
     # Find Library Manager object
     try:
         found_list = primary_project.find("Library Manager", True)
+        if not found_list:
+            found_list = primary_project.find(u"库管理器", True)
         if found_list:
             lib_manager = found_list[0]
             print("DEBUG: Found Library Manager via find('Library Manager')")
@@ -24,7 +26,9 @@ try:
             all_children = primary_project.get_children(True)
             for child in all_children:
                 child_name = getattr(child, 'get_name', lambda: '')()
-                if 'library' in child_name.lower() and 'manager' in child_name.lower():
+                child_name = _to_unicode(child_name)
+                if (('library' in child_name.lower() and 'manager' in child_name.lower())
+                        or u'库管理器' in child_name):
                     lib_manager = child
                     print("DEBUG: Found Library Manager by name search: %s" % child_name)
                     break

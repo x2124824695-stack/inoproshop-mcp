@@ -43,5 +43,11 @@ it('online and Python capabilities are opt-in and full download requires an expl
     const capabilities=await client.callTool({name:'get_capabilities',arguments:{}});
     const payload=JSON.parse((capabilities.content as Array<{type:string;text:string}>)[0].text);
     expect(payload.online).toBe(true);expect(payload.arbitraryPython).toBe(true);expect(payload.hardwareValidated).toBe(false);
+    const missingTemplate=await client.callTool({name:'create_project',arguments:{filePath:'new.project'}});
+    expect(missingTemplate.isError).toBe(true);
+    expect(JSON.stringify(missingTemplate)).toContain('exactly one');
+    const ambiguousTemplate=await client.callTool({name:'create_project',arguments:{filePath:'new.project',templatePath:'template.project',templateName:'AM600'}});
+    expect(ambiguousTemplate.isError).toBe(true);
+    expect(JSON.stringify(ambiguousTemplate)).toContain('exactly one');
   } finally {await client.close();fs.rmSync(workspace,{recursive:true,force:true});}
 });

@@ -9,6 +9,7 @@ import re
 import sys
 import types
 import unittest
+import tempfile
 from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / 'src' / 'scripts'
@@ -20,7 +21,9 @@ def render(name, params):
     return re.sub(r'\{([A-Z][A-Z0-9_]*)\}', sub, (SCRIPTS / name).read_text(encoding='utf8'))
 
 def run_script(name, params, env, module=None):
-    output = io.StringIO()
+    class Capture(io.StringIO):
+        _mcp_unicode_output = True
+    output = Capture()
     env = {'unicode': str, '_to_unicode': str, **env}
     with patch.dict(sys.modules, {'scriptengine': module or types.ModuleType('scriptengine')}), contextlib.redirect_stdout(output):
         try:
@@ -82,6 +85,94 @@ class ScriptTests(unittest.TestCase):
         env={};exec((SCRIPTS/'find_object_by_path.py').read_text(encoding='utf8'),env)
         root=types.SimpleNamespace(get_children=lambda _:[],get_name=lambda:'Root',find=lambda *a:[self.obj])
         self.assertIsNone(env['find_object_by_path_robust'](root,'Missing'))
+
+    def test_create_project_preserves_existing_target(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / 'target.project'
+            source = Path(folder) / 'AM600.project'
+            target.write_bytes(b'original')
+            source.write_bytes(b'template')
+            params = {'TEMPLATE_MODE':'path','TEMPLATE_PROJECT_PATH':str(source),
+                      'TEMPLATE_NAME':'','PROJECT_FILE_PATH':str(target)}
+            code, output = run_script('create_project.py', params, {})
+            self.assertEqual(code, 1)
+            self.assertIn('refusing to overwrite', output)
+            self.assertEqual(target.read_bytes(), b'original')
+
+    def test_chinese_library_manager_is_found(self):
+        library = types.SimpleNamespace(get_name=lambda: 'Standard')
+        manager = types.SimpleNamespace(get_name=lambda: '库管理器', get_children=lambda _: [library])
+        project = types.SimpleNamespace(find=lambda name, _: [manager] if name == '库管理器' else [],
+                                        get_children=lambda _: [manager])
+        code, output = run_script('list_project_libraries.py', {},
+                                  {'PROJECT_FILE_PATH':'test.project',
+                                   'ensure_project_open':lambda _:project})
+        self.assertEqual(code, 0)
+        self.assertIn('Standard', output)
+
+    def test_missing_library_manager_is_error_not_empty_success(self):
+        project = types.SimpleNamespace(find=lambda *args: [], get_children=lambda _: [])
+        code, output = run_script('list_project_libraries.py', {},
+                                  {'PROJECT_FILE_PATH':'test.project',
+                                   'ensure_project_open':lambda _:project})
+        self.assertEqual(code, 1)
+        self.assertIn('SCRIPT_ERROR', output)
+
+    def test_pou_rename_updates_task_call(self):
+        class Node:
+            def __init__(self, name, children=None, **flags):
+                self.value, self.children = name, children or []
+                self.__dict__.update(flags)
+            def get_name(self): return self.value
+            def set_name(self, value): self.value = value
+            def get_children(self, recursive):
+                return self.children + ([node for child in self.children
+                                         for node in child.get_children(True)] if recursive else [])
+        call = Node('POU1')
+        task = Node('MainTask', [call], is_task=True)
+        app = Node('Application', [task])
+        pou = Node('POU1', is_pou=True)
+        project = types.SimpleNamespace(save=self.save)
+        code, output = run_script('rename_object.py', {'OBJECT_PATH':'Application/POU1', 'NEW_NAME':'PLC_PRG'},
+                                  {'PROJECT_FILE_PATH':'test.project', 'ensure_project_open':lambda _:project,
+                                   'find_object_by_path_robust':lambda _, path, __:app if path == 'Application' else pou})
+        self.assertEqual(code, 0)
+        self.assertEqual(pou.get_name(), 'PLC_PRG')
+        self.assertEqual(call.get_name(), 'PLC_PRG')
+        self.assertIn('Task calls updated: 1', output)
+
+    def test_pou_rename_rolls_back_when_task_call_rejects_change(self):
+        class Node:
+            def __init__(self, value, children=None):
+                self.value, self.children = value, children or []
+            def get_name(self): return self.value
+            def set_name(self, value):
+                if self is call and value == 'PLC_PRG':
+                    raise RuntimeError('task call refused rename')
+                self.value = value
+            def get_children(self, recursive):
+                return self.children + ([node for child in self.children
+                                         for node in child.get_children(True)] if recursive else [])
+        call = Node('POU1')
+        task = Node('MainTask', [call]); task.is_task = True
+        app = Node('Application', [task])
+        pou = Node('POU1'); pou.is_pou = True
+        project = types.SimpleNamespace(save=self.save)
+        code, output = run_script('rename_object.py', {'OBJECT_PATH':'Application/POU1', 'NEW_NAME':'PLC_PRG'},
+                                  {'PROJECT_FILE_PATH':'test.project', 'ensure_project_open':lambda _:project,
+                                   'find_object_by_path_robust':lambda _, path, __:app if path == 'Application' else pou})
+        self.assertEqual(code, 1)
+        self.assertEqual(pou.get_name(), 'POU1')
+        self.assertEqual(call.get_name(), 'POU1')
+        self.assertIn('task call refused rename', output)
+
+    def test_shutdown_save_reports_real_failure(self):
+        failing = types.SimpleNamespace(path='test.project', save=lambda: (_ for _ in ()).throw(RuntimeError('disk full')))
+        module = types.ModuleType('scriptengine')
+        module.projects = types.SimpleNamespace(primary=failing)
+        code, output = run_script('save_primary_for_shutdown.py', {}, {}, module)
+        self.assertEqual(code, 1)
+        self.assertIn('disk full', output)
 
 class OnlineTests(unittest.TestCase):
     def setUp(self):

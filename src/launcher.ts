@@ -119,8 +119,8 @@ export class CodesysLauncher implements ScriptExecutor {
   async pendingStatus(acknowledge=false) {return this.ipcClient?this.ipcClient.pendingStatus(acknowledge):{state:'unavailable'};}
   async shutdown():Promise<void> {
     if(!this.ipcClient||!this.isRunning()){this.detach();this.state='stopped';return;}
-    const r=await this.executeScript("import scriptengine as se\nfor p in list(se.projects):\n    p.save()\nprint('SCRIPT_SUCCESS: Projects saved')\n");
-    if(!r.success) throw new Error('Save failed; IDE left open.');
+    const r=await this.executeScript(new ScriptManager().prepareScript('save_primary_for_shutdown',{}));
+    if(!r.success) throw new Error(`Project save failed or could not be verified; IDE left open. ${r.error || r.output}`);
     await this.ipcClient.sendTerminate(); this.detach(); this.state='stopped';
   }
   isRunning():boolean {return this.pid!==null&&alive(this.pid);}

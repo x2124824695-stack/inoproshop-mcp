@@ -12,6 +12,8 @@ try:
     # Pattern 1: Search for it by name in project tree
     try:
         found_list = primary_project.find("Library Manager", True)
+        if not found_list:
+            found_list = primary_project.find(u"库管理器", True)
         if found_list:
             lib_manager = found_list[0]
             print("DEBUG: Found Library Manager via find('Library Manager')")
@@ -24,7 +26,9 @@ try:
             all_children = primary_project.get_children(True)
             for child in all_children:
                 child_name = getattr(child, 'get_name', lambda: '')()
-                if 'library' in child_name.lower() and 'manager' in child_name.lower():
+                child_name = _to_unicode(child_name)
+                if (('library' in child_name.lower() and 'manager' in child_name.lower())
+                        or u'库管理器' in child_name):
                     lib_manager = child
                     print("DEBUG: Found Library Manager by name search: %s" % child_name)
                     break
@@ -65,7 +69,7 @@ try:
         except Exception as e:
             print("WARN: Error enumerating libraries: %s" % e)
     else:
-        print("WARN: Library Manager not found in project.")
+        raise RuntimeError("Library Manager / 库管理器 not found; cannot conclude that the project has no libraries.")
 
     for entry in libraries:
         for k in ('name', 'version', 'company'):
