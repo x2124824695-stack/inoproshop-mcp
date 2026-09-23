@@ -316,14 +316,15 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
 
   s.tool(
     'list_project_templates',
-    "List project templates known to this CODESYS install. Combines (1) templates registered via CODESYS's Template Manager — what File > New Project > Standard Project from Template shows — and (2) a filesystem scan of well-known template locations under %ProgramData%/CODESYS. Returns {name, path, source} per template; pass `name` to create_project(templateName=...) or `path` to create_project(templatePath=...).",
+    "Discover templates for any PLC model supported by this InoProShop installation: registered IDE templates, installed template directories and the workspace .templates directory. A filesystem .project path can be used with create_project(templatePath); other formats need a supported registered templateName or conversion in the IDE.",
     {
       extraTemplateDir: z.string().optional().describe("Optional additional directory to scan for .project / .projecttemplate files."),
     },
     async (args: { extraTemplateDir?: string }) => {
       const script = scriptManager.prepareScriptWithHelpers(
         'list_project_templates',
-        { EXTRA_TEMPLATE_DIR: args.extraTemplateDir ?? '' },
+        { EXTRA_TEMPLATE_DIR: args.extraTemplateDir ?? '',
+          WORKSPACE_TEMPLATE_DIR: path.join(workspaceDir, '.templates') },
         ['_text_utils']
       );
       const result = await executor.executeScript(script, 60_000);

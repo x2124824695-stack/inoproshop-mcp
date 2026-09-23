@@ -1,6 +1,6 @@
 {
   "name": "inoproshop-mcp-improved",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "InoProShop MCP with verified edits, persistent session ownership and explicit online operations",
   "main": "dist/server.js",
   "bin": {

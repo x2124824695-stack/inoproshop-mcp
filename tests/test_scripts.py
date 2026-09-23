@@ -118,6 +118,24 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('SCRIPT_ERROR', output)
 
+    def test_template_discovery_includes_workspace_models(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace_templates = Path(folder) / '.templates'
+            workspace_templates.mkdir()
+            (workspace_templates / 'AM600.project').write_bytes(b'example')
+            (workspace_templates / 'AM400.project').write_bytes(b'example')
+            payloads = []
+            module = types.ModuleType('scriptengine')
+            module.projects = types.SimpleNamespace()
+            with patch.dict('os.environ', {'ProgramData': str(Path(folder) / 'empty')}):
+                code, _ = run_script('list_project_templates.py',
+                                     {'WORKSPACE_TEMPLATE_DIR': str(workspace_templates),
+                                      'EXTRA_TEMPLATE_DIR': ''},
+                                     {'emit_result': payloads.append}, module)
+            self.assertEqual(code, 0)
+            self.assertEqual({item['name'] for item in payloads[0]['templates']},
+                             {'AM600', 'AM400'})
+
     def test_pou_rename_updates_task_call(self):
         class Node:
             def __init__(self, name, children=None, **flags):

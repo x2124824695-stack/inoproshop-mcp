@@ -6,7 +6,9 @@
 
 通过真实 MCP 服务演示工具发现、能力查询和权限限制，无需连接 PLC。
 
-创建汇川 AM600 工程时，请先阅读[模板选择、根控制器与任务调用项检查](docs/AM600_PROJECT_CREATION.md)。`create_project` 现在必须显式指定模板；标准 CoDeSys 模板不会自动替代目标控制器。
+创建汇川各型号 PLC 工程时，请阅读[通用模板选择与根控制器复核](docs/PROJECT_CREATION.md)；[AM600 案例](docs/AM600_PROJECT_CREATION.md)仅是其中一个实例。`create_project` 必须指定对应型号的模板，`list_project_templates` 会发现工作区 `.templates` 中的工程模板。
+
+GitHub 的“Download ZIP”是未加密的源码压缩包，不包含构建产物 `dist`。解压后在仓库目录执行 `npm ci --ignore-scripts`、`npm run build`，再配置 `dist/bin.js`；也可使用 Releases 中附带 `dist` 的发布包。
 
 面向汇川 InoProShop 的本地 stdio MCP 服务。它以用户提供的常驻版源码为主体，合并了 LIMIT-LMT 单文件版中有价值的工程读取、对象移动和任务配置能力，并修复了会造成误报、重复执行或在线操作升级的问题。
 

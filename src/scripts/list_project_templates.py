@@ -2,6 +2,7 @@ import sys, scriptengine as script_engine, os, traceback
 
 # Optional extra directory the caller wants scanned (in addition to defaults).
 EXTRA_TEMPLATE_DIR = "{EXTRA_TEMPLATE_DIR}"
+WORKSPACE_TEMPLATE_DIR = "{WORKSPACE_TEMPLATE_DIR}"
 
 # Lists project templates known to this CODESYS install via two channels:
 #   1) ScriptEngine API (if exposed in this SP) — picks up templates registered
@@ -99,6 +100,9 @@ try:
     candidate_dirs = []
     candidate_dirs.append(os.path.join(program_data, 'CODESYS', 'Templates'))
     candidate_dirs.append(os.path.join(program_data, 'CODESYS', 'CODESYS', 'Templates'))
+    # The workspace is where operators keep per-controller known-good samples.
+    # Discover them automatically without walking every project in the workspace.
+    candidate_dirs.append(WORKSPACE_TEMPLATE_DIR)
     # Devices/ holds device packages; some ifm packages drop .project templates
     # inside their device subtree. We don't walk all 100k+ entries — limit to
     # one level deep on each device to keep this fast.
