@@ -41,6 +41,7 @@ program
     'persistent'
   )
   .option('--no-auto-launch', 'Do not auto-launch CODESYS on startup')
+  .option('--attach-existing', 'Only attach to an already-open IDE; disable all IDE launching', false)
   .option('--enable-online', 'Expose PLC online tools (requires target-version validation)', false)
   .option('--enable-python', 'Expose arbitrary IronPython execution (trusted development only)', false)
   .option('--read-only', 'Expose inspection and explicit project opening only', false)
@@ -90,16 +91,18 @@ if (opts.detect) {
   if (!['persistent','headless'].includes(opts.mode)) program.error('--mode must be persistent or headless.');
   if (!Number.isInteger(Number(opts.timeout)) || Number(opts.timeout) < 1000) program.error('--timeout must be an integer >= 1000 ms.');
   if (opts.mode === 'headless' && opts.enableOnline) program.error('Online tools require persistent mode.');
+  if (opts.attachExisting && opts.mode !== 'persistent') program.error('--attach-existing requires --mode persistent.');
   // Build server config
   const config: ServerConfig = {
     codesysPath: opts.codesysPath.trim(),
     profileName: opts.codesysProfile.trim(),
     workspaceDir: opts.workspace.trim(),
-    autoLaunch: opts.autoLaunch !== false,
+    autoLaunch: !opts.attachExisting && opts.autoLaunch !== false,
     keepAlive: opts.keepAlive !== false,
     enableOnline: opts.enableOnline,
     enablePython: opts.enablePython,
     readOnly: opts.readOnly,
+    attachExisting: opts.attachExisting,
     timeoutMs: parseInt(opts.timeout, 10) || 60000,
     verbose: opts.verbose || false,
     debug: opts.debug || false,

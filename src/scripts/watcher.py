@@ -206,6 +206,9 @@ try:
     _stop_event = ManualResetEvent(False)
     t = Thread(ThreadStart(worker))
     t.IsBackground = True
+    if '_attach_metadata' in globals():
+        atomic_write(os.path.join(IPC_BASE_DIR, 'session.json'),
+                     json.dumps(_attach_metadata, ensure_ascii=False))
     atomic_write(os.path.join(IPC_BASE_DIR, 'ready.signal'), json.dumps({
         'version': WATCHER_VERSION, 'sessionToken': SESSION_TOKEN,
         'pid': os.getpid(), 'timestamp': time.time() * 1000}, ensure_ascii=False))

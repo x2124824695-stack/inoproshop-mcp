@@ -10,6 +10,7 @@ with open(os.path.join(FIXTURE_DIR, 'fixtures.json'), 'rb') as f:
 # Compile the complete production watcher, but omit its startup block at run
 # time. Use the actual .NET File API and threading event in process_command.
 compile(fixtures['watcher'], '<watcher>', 'exec')
+compile(fixtures['attachment'], '<existing-ide-bootstrap>', 'exec')
 watcher_source = fixtures['watcher'].rsplit('\ntry:\n    for directory', 1)[0]
 watch = {}
 exec(watcher_source, watch)
@@ -79,4 +80,4 @@ assert data['count'] == 2 and data['complete'] and data['hits'][0]['path'] == No
 out = run_query(fixtures['bulk'])
 data = json.loads(out.split('### ALL_POU_CODE_START ###\n')[1].split('\n### ALL_POU_CODE_END ###')[0])
 assert len(data) == 1 and data[0]['implementation'] == Node.textual_implementation.text
-print('PASS: bundled IronPython ' + sys.version.split()[0] + '; watcher success/error/nonzero/no replay; Chinese search and bulk read')
+print('PASS: bundled IronPython ' + sys.version.split()[0] + '; existing IDE bootstrap syntax; watcher success/error/nonzero/no replay; Chinese search and bulk read')

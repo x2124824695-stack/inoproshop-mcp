@@ -70,17 +70,33 @@ Claude Code 可用 `claude mcp list` 或会话内 `/mcp` 检查连接。项目�
 
 | 参数 | 行为 |
 |---|---|
-| `--no-auto-launch` | MCP 先连接，之后显式调用 `launch_codesys` |
+| `--no-auto-launch` | MCP 先连接，之后显式调用 `launch_codesys`，或接入已经打开的 IDE |
+| `--attach-existing` | 只接入已有 IDE；关闭自动启动，`launch_codesys` 也禁止另开 IDE。与 `--read-only` 一起使用时不注册 `open_project` |
 | `--read-only` | 检查、显式启动/打开工程、已完成请求的恢复确认；退出时不保存工程 |
 | `--enable-online` | 注册 PLC 连接、读取、写入、下载、启停和监视工具 |
 | `--enable-python` | 注册 `eval_python`；仅限可信开发环境 |
-| `--mode headless` | 每次命令启动无 UI 实例；不允许在线工具，中文已改为 UTF-8 |
+| `--mode headless` | 每次命令启动无 UI 实例；不保留工程上下文。要求当前工程的读取工具会在启动进程前拒绝，提示改用常驻模式 |
 | `--no-keep-alive` | 非只读模式退出时保存工程并停止 watcher；只读模式忽略此保存行为 |
 | `--timeout 60000` | 默认命令结果等待时间，最小 1000 ms |
 
 不要同时给同一个 exe/Profile/工作区启动多个 MCP 服务。服务会通过所有权文件拒绝第二个实例，不会杀掉用户正在使用的 IDE。
 
 ## 推荐工作流
+
+### 读取已经手动打开的工程
+
+启动服务时使用 `--mode persistent --attach-existing --read-only`，工作区覆盖目标工程所在目录：
+
+1. 调用 `prepare_existing_session`，参数 `projectFilePath` 为当前已打开的工程路径。
+2. 在目标 InoProShop 窗口中选择“工具 → 脚本 → 执行脚本文件”，运行返回的 `scriptPath`。
+3. 调用 `attach_codesys`。只有 IDE 可执行文件、当前工程、会话 token、版本和 PID 核对成功，才会连接。
+4. 调用 `get_project_structure`、`get_pou_code` 或 `get_all_pou_code`。读取的是该窗口里的工程内容，包括尚未保存的编辑内容。
+
+接入过程不会打开、切换或保存工程，也不会连接、下载或启停 PLC。脚本只需在该 IDE 会话中运行一次；MCP 重启后使用相同配置调用 `attach_codesys` 即可重新连接。未完成接入时，`launch_codesys` 会拒绝启动第二个 IDE。
+
+`--mode headless` 无法读取另一个已经打开的窗口：每条调用都启动独立进程，所以先调用 `open_project` 再调用读取工具不能保留上下文。请使用上述接入流程。生成的接入脚本、会话记录和工程读取结果都是本地文件，不应提交到工具仓库。
+
+### 由 MCP 启动工程
 
 1. `get_codesys_status`，确认 watcher 已就绪。
 2. `open_project`，显式打开工作区内工程。

@@ -10,5 +10,7 @@ const fixtures={
   search:manager.prepareScriptWithHelpers('search_code',params,['_text_utils']),
   bulk:manager.prepareScriptWithHelpers('get_all_pou_code',{PROJECT_FILE_PATH:params.PROJECT_FILE_PATH},['_text_utils']),
   watcher:manager.prepareScript('watcher',{IPC_BASE_DIR:output,SESSION_TOKEN:'fixture',WATCHER_VERSION}),
+  attachment:manager.prepareScriptWithHelpers('watcher',{IPC_BASE_DIR:output,SESSION_TOKEN:'fixture',WATCHER_VERSION,
+    SESSION_ID:'fixture',CODESYS_PATH:process.execPath,PROJECT_FILE_PATH:params.PROJECT_FILE_PATH},['attach_session']),
 };
 fs.writeFileSync(path.join(output,'fixtures.json'),JSON.stringify(fixtures),'utf8');
