@@ -12,7 +12,7 @@ const READ = new Set(['get_codesys_status','get_command_status','get_project_str
   'get_all_pou_code','search_code','find_references','get_compile_messages','get_device_params',
   'get_task_config','list_device_repository','inspect_device_node','list_project_libraries',
   'list_project_templates','get_application_state','read_variable','get_forced_variables','get_capabilities']);
-const CONTROL = new Set(['launch_codesys','shutdown_codesys','recover_session']);
+const CONTROL = new Set(['launch_codesys','shutdown_codesys','recover_session','prepare_existing_session','attach_codesys']);
 
 /** Resolve through existing ancestors so junctions/symlinks cannot escape roots. */
 export function workspacePath(input: string, workspace: string): string {
@@ -35,9 +35,10 @@ export function workspacePath(input: string, workspace: string): string {
 }
 
 export function toolAllowed(name: string, config: ServerConfig): boolean {
+  if (config.attachExisting && config.readOnly && name === 'open_project') return false;
   if (ONLINE.has(name) && !config.enableOnline) return false;
   if (name === 'eval_python' && (!config.enablePython || config.readOnly)) return false;
-  return !config.readOnly || READ.has(name) || name === 'launch_codesys' || name === 'open_project' || name === 'recover_session';
+  return !config.readOnly || READ.has(name) || (CONTROL.has(name) && name !== 'shutdown_codesys') || name === 'open_project';
 }
 
 /** All tool operations share one queue, including backup and lifecycle calls. */

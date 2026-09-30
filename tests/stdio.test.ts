@@ -15,6 +15,7 @@ it('stdio handshake, discovery, policies and unavailable IDE are truthful withou
     const list=await client.listTools();const names=list.tools.map(t=>t.name);
     expect(names).toContain('get_pou_code');expect(names).toContain('get_task_config');
     expect(names).toContain('recover_session');expect(names).not.toContain('shutdown_codesys');
+    expect(names).toContain('prepare_existing_session');expect(names).toContain('attach_codesys');
     expect(names).not.toContain('write_variable');expect(names).not.toContain('eval_python');expect(names).not.toContain('set_pou_code');
     const status=await client.callTool({name:'get_codesys_status',arguments:{}});
     expect(JSON.stringify(status)).toContain('stopped');
@@ -25,6 +26,25 @@ it('stdio handshake, discovery, policies and unavailable IDE are truthful withou
     expect(failed.isError).toBe(true);expect(JSON.stringify(failed)).toContain('not ready');
     const outside=await client.callTool({name:'get_pou_code',arguments:{projectFilePath:'../outside.project',pouPath:'Application/P'}});
     expect(outside.isError).toBe(true);expect(JSON.stringify(outside)).toContain('outside');
+  } finally {await client.close();fs.rmSync(workspace,{recursive:true,force:true});}
+});
+
+it('existing-only mode forbids launch and project switching even without --no-auto-launch',async()=>{
+  const workspace=fs.mkdtempSync(path.join(os.tmpdir(),'inoproshop-stdio-existing-'));
+  const transport=new StdioClientTransport({command:process.execPath,args:[path.resolve('dist/bin.js'),
+    '--codesys-path',process.execPath,'--codesys-profile','TEST-EXISTING','--workspace',workspace,
+    '--attach-existing','--read-only'],stderr:'pipe'});
+  const client=new Client({name:'existing-regression',version:'1.0'});
+  try {
+    await client.connect(transport);
+    const names=(await client.listTools()).tools.map(t=>t.name);
+    expect(names).toContain('attach_codesys');expect(names).not.toContain('open_project');
+    const launched=await client.callTool({name:'launch_codesys',arguments:{}});
+    expect(launched.isError).toBe(true);expect(JSON.stringify(launched)).toContain('forbids launching');
+    const status=await client.callTool({name:'get_codesys_status',arguments:{}});
+    expect(JSON.stringify(status)).toContain('stopped');
+    const caps=await client.callTool({name:'get_capabilities',arguments:{}});
+    expect(caps.structuredContent?.result).toMatchObject({attachExisting:true});
   } finally {await client.close();fs.rmSync(workspace,{recursive:true,force:true});}
 });
 

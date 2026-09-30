@@ -65,6 +65,8 @@ export interface ServerConfig extends LauncherConfig {
   enableOnline?: boolean;
   enablePython?: boolean;
   readOnly?: boolean;
+  /** Existing IDE only: launch_codesys must never create another IDE. */
+  attachExisting?: boolean;
 }
 
 /** Script template parameters */

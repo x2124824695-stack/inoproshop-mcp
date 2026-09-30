@@ -57,6 +57,47 @@ export class CodesysLauncher implements ScriptExecutor {
       this.ownsLock=false;
     }
   }
+  /** Bootstrap a watcher in a manually opened IDE; never starts a second IDE. */
+  async prepareAttachment(projectFilePath: string): Promise<{scriptPath: string; sessionId: string}> {
+    if (this.launching) throw new Error('IDE launch is in progress.');
+    this.claim();
+    fs.mkdirSync(this.ipcDir, {recursive:true});
+    let meta:any;
+    try {meta=JSON.parse(fs.readFileSync(path.join(this.ipcDir,'session.json'),'utf8'));} catch {meta=null;}
+    if (meta?.pid && alive(meta.pid)) throw new Error('A live session already exists. Call attach_codesys or launch_codesys; do not run another watcher.');
+    this.ipcClient=this.makeClient(meta?.token || 'unavailable');
+    if ((await this.ipcClient.pendingStatus()).state!=='clear') throw new Error('Previous session has an unresolved command. Inspect get_command_status before attaching.');
+    const token=randomUUID();
+    this.ipcClient=this.makeClient(token);
+    await this.ipcClient.ensureDirectories();
+    for (const name of ['ready.signal','terminate.signal']) {try {fs.unlinkSync(path.join(this.ipcDir,name));} catch {}}
+    const scriptPath=path.join(this.ipcDir,'attach-watcher.py');
+    fs.writeFileSync(path.join(this.ipcDir,'attachment.json'), JSON.stringify({identity:this.sessionId,token,projectFilePath}), 'utf8');
+    fs.writeFileSync(scriptPath, new ScriptManager().prepareScriptWithHelpers('watcher', {
+      IPC_BASE_DIR:this.ipcDir, SESSION_TOKEN:token, WATCHER_VERSION,
+      SESSION_ID:this.sessionId, CODESYS_PATH:path.resolve(this.config.codesysPath), PROJECT_FILE_PATH:projectFilePath,
+    }, ['attach_session']), 'utf8');
+    return {scriptPath,sessionId:this.sessionId};
+  }
+  /** Connect only after the bootstrap proved the IDE executable and open project. */
+  async attach(): Promise<void> {
+    if (this.launching) throw new Error('IDE launch is in progress.');
+    this.claim();
+    let meta:any, ready:any, prepared:any;
+    try {
+      meta=JSON.parse(fs.readFileSync(path.join(this.ipcDir,'session.json'),'utf8'));
+      ready=JSON.parse(fs.readFileSync(path.join(this.ipcDir,'ready.signal'),'utf8'));
+      prepared=JSON.parse(fs.readFileSync(path.join(this.ipcDir,'attachment.json'),'utf8'));
+    } catch {throw new Error('Existing IDE watcher is not ready. Call prepare_existing_session, run its script in the target IDE, then attach_codesys.');}
+    if (!meta.attached || meta.identity!==this.sessionId || meta.version!==WATCHER_VERSION || !meta.token ||
+        prepared.identity!==this.sessionId || prepared.token!==meta.token || ready.sessionToken!==meta.token ||
+        ready.version!==WATCHER_VERSION || ready.pid!==meta.pid || !Number.isInteger(meta.pid) || !alive(meta.pid)) {
+      throw new Error('Existing IDE session identity, token, version or PID mismatch; no IDE was started.');
+    }
+    if (fs.existsSync(path.join(this.ipcDir,'terminate.signal'))) throw new Error('Existing IDE watcher was stopped; no new IDE was started.');
+    this.pid=meta.pid; this.startedAt=meta.startedAt; this.ipcClient=this.makeClient(meta.token);
+    this.state='ready'; this.lastError=null;
+  }
   async launch():Promise<void> {
     if(this.launching) return this.launching;
     if(this.state==='ready'&&this.isRunning()) return;
@@ -77,6 +118,7 @@ export class CodesysLauncher implements ScriptExecutor {
       if(fs.existsSync(path.join(this.ipcDir,'terminate.signal'))) throw new Error('Watcher was shut down. Close this IDE manually before launching a new session.');
       await this.waitReady(); this.state='ready'; this.lastError=null; return;
     }
+    if(fs.existsSync(path.join(this.ipcDir,'attachment.json'))) throw new Error('An existing-IDE attachment is prepared. Run attach-watcher.py in that IDE and call attach_codesys; launch_codesys will not start a second IDE.');
     this.ipcClient=this.makeClient(meta?.token||'unavailable');
     if((await this.ipcClient.pendingStatus()).state!=='clear') {
       throw new Error('Previous session has an unresolved command. Inspect get_command_status and verify the project; no commands will be replayed.');

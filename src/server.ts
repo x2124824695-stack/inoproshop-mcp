@@ -99,7 +99,7 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
   // the inner executor changes (see executor-proxy.ts for the contract).
   let launcher: CodesysLauncher | null = null;
   let executionMode: ExecutionMode = config.mode;
-  const unavailable: ScriptExecutor = {async executeScript() {throw new Error('IDE is not ready. Call launch_codesys. Automatic headless fallback is disabled.');}};
+  const unavailable: ScriptExecutor = {async executeScript() {throw new Error('IDE is not ready. For an already-open IDE, call prepare_existing_session, run its script in that IDE, then attach_codesys. Otherwise call launch_codesys. Automatic headless fallback is disabled.');}};
   const initialExecutor: ScriptExecutor = config.mode === 'headless' ? new HeadlessExecutor(config) : unavailable;
   const executor = new ExecutorProxy(initialExecutor);
 
@@ -141,16 +141,34 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
       return {content:[{type:'text',text:JSON.stringify(status)}],isError:!['acknowledged','clear'].includes(status.state)};
     });
   s.tool('get_capabilities', 'List enabled tools, configured execution mode and limits. Registration is not proof of target-version support.', async () => ({
-    content:[{type:'text',text:JSON.stringify({mode:config.mode,profile:config.profileName,tools:s.names,online:!!config.enableOnline,
+    content:[{type:'text',text:JSON.stringify({mode:config.mode,profile:config.profileName,tools:s.names,online:!!config.enableOnline,attachExisting:!!config.attachExisting,
       arbitraryPython:!!config.enablePython,readOnly:!!config.readOnly,hardwareValidated:false})}],
   }));
 
   // ─── Management Tools ────────────────────────────────────────────────
 
+  s.tool('prepare_existing_session',
+    'Prepare a local watcher bootstrap for an already-open IDE. Returns a script path to run through the target IDE Tools > Scripting > Execute Script File. Does not launch an IDE, open/switch/save a project, or change PLC state.',
+    {projectFilePath:z.string().min(1)}, async (args:{projectFilePath:string}) => {
+      if (!launcher) throw new Error('Existing IDE attachment requires --mode persistent --no-auto-launch.');
+      const prepared=await launcher.prepareAttachment(args.projectFilePath);
+      return {content:[{type:'text',text:JSON.stringify({...prepared, nextStep:'Run scriptPath in the target IDE via Tools > Scripting > Execute Script File, then call attach_codesys.'})}]};
+    });
+  s.tool('attach_codesys',
+    'Connect to a manually opened IDE after its prepared bootstrap has run. Validates session identity, token, watcher version and PID; never launches another IDE.',
+    async () => {
+      if (!launcher) throw new Error('Existing IDE attachment requires --mode persistent --no-auto-launch.');
+      await launcher.attach(); executor.swapNow(launcher); executionMode='persistent';
+      return {content:[{type:'text',text:JSON.stringify(launcher.getStatus())}]};
+    });
+
   s.tool(
     'launch_codesys',
     'Manually launch CODESYS with UI. Use when --no-auto-launch was set.',
     async () => {
+      if (config.attachExisting) {
+        return {content:[{type:'text',text:'--attach-existing forbids launching another IDE. Use prepare_existing_session and attach_codesys.'}],isError:true};
+      }
       if (!launcher) {
         return {
           content: [{ type: 'text' as const, text: 'Persistent mode not configured. Use --mode persistent.' }],
@@ -1769,7 +1787,7 @@ export async function startMcpServer(config: ServerConfig): Promise<void> {
 
   // ─── Background auto-launch (do not await) ───────────────────────────
 
-  if (launcher && config.autoLaunch) {
+  if (launcher && config.autoLaunch && !config.attachExisting) {
     const persistentLauncher = launcher;
     serverLog.info('Auto-launching CODESYS in the background...');
     // Hand the proxy a readiness promise so tool calls during the launch

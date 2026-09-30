@@ -33,6 +33,9 @@ export class HeadlessExecutor implements ScriptExecutor {
 
   /** Execute a script by spawning CODESYS with --noUI */
   executeScript(content: string, timeoutMs?: number): Promise<IpcResult> {
+    if (/^def require_project_open\(/m.test(content)) {
+      return Promise.reject(new Error('Headless mode starts a fresh IDE for every command and cannot read the primary project of an already-open IDE. open_project in a previous call does not persist. Use --mode persistent --no-auto-launch with prepare_existing_session and attach_codesys. No headless IDE was started.'));
+    }
     return this.queue.run(() => this.runScript(content, timeoutMs));
   }
 
